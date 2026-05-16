@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Salish Sound — Seattle Radio Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: "Kalam", "Caveat", system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  /* Caveat for big script-y headers, Kalam for body sketch text */
+  body { font-family: "Kalam", "Caveat", "Comic Sans MS", system-ui, sans-serif; }
+  input[type="range"] { cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="stations.jsx"></script>
+<script type="text/babel" src="radio-engine.jsx"></script>
+<script type="text/babel" src="var-a.jsx"></script>
+<script type="text/babel" src="var-b.jsx"></script>
+<script type="text/babel" src="var-c.jsx"></script>
+<script type="text/babel" src="var-d.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "mountainOpacity": 0.6
+  }/*EDITMODE-END*/;
+
+  function App() {
+    const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+    return (
+      <>
+        <DesignCanvas>
+          <DCSection id="seattle-radio" title="Seattle Radio · low-fi wireframes"
+            subtitle="Mt Rainier sketch · Pacific blue + alder green + cedar · 4 layout directions">
+            <DCArtboard id="a" label="A · Classic split (list ↔ player)" width={1100} height={720}>
+              <VariationA mountainOpacity={t.mountainOpacity} />
+            </DCArtboard>
+            <DCArtboard id="b" label="B · Card grid + bottom dock" width={1100} height={720}>
+              <VariationB mountainOpacity={t.mountainOpacity} />
+            </DCArtboard>
+            <DCArtboard id="c" label="C · Genre groups + hero player" width={1100} height={720}>
+              <VariationC mountainOpacity={t.mountainOpacity} />
+            </DCArtboard>
+            <DCArtboard id="d" label="D · Tuner dial metaphor" width={1100} height={720}>
+              <VariationD mountainOpacity={t.mountainOpacity} />
+            </DCArtboard>
+            <DCPostIt top={-30} left={60} rotate={-3} width={220}>
+              4 sketchy directions for the Seattle radio streamer. Click any artboard's ⤢ to focus, or click the play buttons — they actually try to stream!
+            </DCPostIt>
+            <DCPostIt top={-30} right={60} rotate={2} width={200}>
+              Toggle <b>Tweaks</b> in the toolbar to fade Mt Rainier in/out.
+            </DCPostIt>
+          </DCSection>
+        </DesignCanvas>
+        <TweaksPanel title="Tweaks">
+          <TweakSection label="Background" />
+          <TweakSlider label="Mt Rainier opacity" value={t.mountainOpacity}
+            min={0} max={0.6} step={0.01}
+            onChange={(v) => setTweak('mountainOpacity', v)} />
+        </TweaksPanel>
+      </>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
