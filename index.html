@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Salish Sound — Seattle Streaming Radio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --pacific:   #1a3a5c;  /* deep Pacific blue */
+    --alder:     #2c5e3f;  /* alder green */
+    --cedar:     #a8501e;  /* cedar / accent */
+    --paper:     #fdfbf5;  /* warm off-white */
+    --paper-2:   rgba(253,251,245,0.55);  /* translucent so watercolor shows through */
+    --ink-dim:   #6b5d4a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    font-family: "Kalam", "Caveat", "Comic Sans MS", system-ui, sans-serif;
+    color: var(--pacific);
+    background: var(--paper);
+  }
+
+  .mono { font-family: "JetBrains Mono", "Courier New", monospace; }
+
+  /* Background photo + paper wash */
+  .bg-photo {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    overflow: hidden;
+  }
+  .bg-photo img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center 35%;
+    filter: saturate(0.85) contrast(0.95);
+  }
+  .bg-photo .wash {
+    position: absolute; inset: 0;
+    /* Light vignette so corners breathe; main scene stays visible */
+    background:
+      radial-gradient(ellipse at center, rgba(253,251,245,0) 30%, rgba(253,251,245,0.18) 100%);
+  }
+
+  /* Sketchy box helper — double-stroked outline */
+  .sketch {
+    position: relative;
+    background: var(--paper-2);
+    backdrop-filter: blur(8px) saturate(0.95);
+    -webkit-backdrop-filter: blur(8px) saturate(0.95);
+  }
+  .sketch::before, .sketch::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    border: 1.5px solid var(--pacific);
+  }
+  .sketch::after { inset: 3px; border-width: 1px; opacity: 0.45; }
+  .sketch.green::before, .sketch.green::after { border-color: var(--alder); }
+  .sketch.dashed::before { border-style: dashed; }
+
+  /* Layout */
+  .app {
+    position: relative; z-index: 1;
+    height: 100vh; display: flex; flex-direction: column;
+    padding: 24px 32px 28px;
+    gap: 20px;
+  }
+
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 24px; flex-shrink: 0;
+  }
+  header h1 {
+    margin: 0; font-family: "Caveat", cursive; font-weight: 700;
+    font-size: 44px; line-height: 0.95; letter-spacing: -0.5px;
+    color: var(--pacific);
+  }
+  header .sub {
+    font-family: "Kalam", cursive; font-size: 15px; color: var(--ink-dim);
+    margin-top: 2px;
+  }
+  header .right { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-dim); text-align: right; }
+  header .right .live { color: var(--cedar); }
+
+  .scribble {
+    display: block; width: 140px; height: 6px; margin-top: 4px;
+  }
+
+  /* Two-column main */
+  .main {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 380px 1fr; gap: 20px;
+  }
+
+  /* Left: grouped station list */
+  .stations {
+    padding: 20px 14px 20px 22px;
+    overflow: hidden;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .stations h2 {
+    margin: 0 0 4px; font-family: "Caveat", cursive; font-weight: 700;
+    font-size: 26px; color: var(--pacific);
+  }
+  .stations .count { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); margin-bottom: 14px; }
+  .station-scroll {
+    flex: 1; overflow-y: auto; padding-right: 8px;
+    scrollbar-width: thin; scrollbar-color: rgba(26,58,92,0.3) transparent;
+  }
+  .station-scroll::-webkit-scrollbar { width: 6px; }
+  .station-scroll::-webkit-scrollbar-thumb { background: rgba(26,58,92,0.3); border-radius: 3px; }
+
+  .group { margin-bottom: 18px; }
+  .group-hd {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--cedar); letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .group-hd .line { flex: 1; height: 1px; border-top: 1px dashed rgba(168,80,30,0.5); }
+  .group-hd .n { color: var(--ink-dim); }
+
+  .station {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; cursor: pointer;
+    border-left: 3px dashed rgba(26,58,92,0.25);
+    margin-bottom: 4px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .station:hover { background: rgba(26,58,92,0.05); }
+  .station.active {
+    background: rgba(44,94,63,0.14);
+    border-left: 3px solid var(--alder);
+  }
+  .station .name { font-family: "Caveat", cursive; font-size: 22px; line-height: 1; color: var(--pacific); }
+  .station .meta { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); margin-top: 3px; }
+  .station .grow { flex: 1; min-width: 0; }
+  .station .eq { display: flex; gap: 2px; align-items: flex-end; height: 14px; }
+  .station .eq i {
+    width: 2.5px; background: var(--alder); display: block;
+    animation: eq 0.7s ease-in-out infinite alternate;
+  }
+  .station .eq i:nth-child(1) { height: 60%; animation-duration: 0.8s; }
+  .station .eq i:nth-child(2) { height: 100%; animation-duration: 0.55s; }
+  .station .eq i:nth-child(3) { height: 40%; animation-duration: 0.7s; animation-delay: 0.1s; }
+  @keyframes eq { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
+
+  .fav {
+    border: none; background: transparent; cursor: pointer; padding: 2px;
+    color: rgba(26,58,92,0.35); display: flex;
+  }
+  .fav.on { color: var(--cedar); }
+  .fav:hover { color: var(--cedar); }
+
+  /* Right: hero player */
+  .hero {
+    padding: 28px 32px;
+    display: grid; grid-template-columns: 320px 1fr; gap: 32px;
+    min-height: 0;
+  }
+  .thumb-col { display: flex; flex-direction: column; }
+  .thumb {
+    width: 320px; height: 320px;
+    background: repeating-linear-gradient(135deg, rgba(26,58,92,0.07) 0 10px, transparent 10px 20px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; position: relative;
+  }
+  .thumb-art {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background-size: cover; background-position: center;
+  }
+  .thumb-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .thumb-label { font-family: "JetBrains Mono", monospace; font-size: 9px; color: var(--ink-dim); text-align: center; }
+
+  .status {
+    margin-top: 14px; font-family: "JetBrains Mono", monospace; font-size: 11px;
+    color: var(--ink-dim); text-align: center;
+  }
+  .status.live { color: var(--alder); }
+  .status.buffering { color: var(--cedar); }
+
+  .meta-col { display: flex; flex-direction: column; min-width: 0; }
+  .now-label {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--cedar); letter-spacing: 1.5px;
+  }
+  .station-name {
+    font-family: "Caveat", cursive; font-weight: 700;
+    font-size: 56px; line-height: 1; color: var(--pacific);
+    margin-top: 4px; word-break: break-word;
+  }
+  .station-meta {
+    font-family: "JetBrains Mono", monospace; font-size: 11px;
+    color: var(--ink-dim); margin-top: 6px;
+  }
+  .track {
+    margin-top: 22px; padding-top: 18px;
+    border-top: 1px dashed rgba(26,58,92,0.3);
+  }
+  .track .lbl { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); }
+  .track .song {
+    font-family: "Caveat", cursive; font-size: 32px; line-height: 1.1;
+    color: var(--alder); margin-top: 4px;
+  }
+  .track .artist {
+    font-family: "Kalam", cursive; font-size: 18px; color: var(--pacific); margin-top: 2px;
+  }
+
+  .controls {
+    margin-top: auto; padding-top: 24px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .transport { display: flex; align-items: center; gap: 14px; }
+  .btn-circ {
+    border: none; background: transparent; cursor: pointer; padding: 0;
+    width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--pacific); position: relative;
+  }
+  .btn-circ::before, .btn-circ::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    border: 1.8px solid currentColor; pointer-events: none;
+  }
+  .btn-circ::after { inset: 3px; border-width: 1px; opacity: 0.45; }
+  .btn-circ.lg { width: 72px; height: 72px; }
+  .btn-circ.play {
+    color: var(--alder); background: var(--alder);
+  }
+  .btn-circ.play svg { color: var(--paper); }
+  .btn-circ:hover { transform: translateY(-1px); }
+  .btn-circ svg { position: relative; z-index: 1; }
+
+  .fav-big {
+    border: 1px dashed var(--cedar); background: transparent;
+    padding: 10px 16px; cursor: pointer;
+    font-family: "JetBrains Mono", monospace; font-size: 11px;
+    color: var(--cedar); margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .fav-big.on { background: var(--cedar); color: var(--paper); }
+
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row .lbl { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); width: 48px; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 4px; background: rgba(26,58,92,0.18);
+    border-radius: 2px; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--alder); cursor: pointer;
+    border: 2px solid var(--paper);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--alder); cursor: pointer; border: 2px solid var(--paper);
+  }
+  .vol-num { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); width: 30px; text-align: right; }
+
+  .sleep-btns { display: flex; gap: 6px; flex: 1; }
+  .sleep-btn {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    padding: 4px 10px; cursor: pointer; background: transparent;
+    border: 1px dashed var(--pacific); color: var(--pacific);
+  }
+  .sleep-btn.active { background: var(--pacific); color: var(--paper); border-style: solid; }
+  .sleep-rem { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--cedar); margin-left: auto; }
+
+  /* Footer credit */
+  footer {
+    flex-shrink: 0;
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-dim); display: flex; justify-content: space-between;
+    padding-top: 4px;
+    text-shadow: 0 1px 2px rgba(253,251,245,0.6);
+  }
+  footer a { color: var(--ink-dim); text-decoration: underline dotted; }
+
+  /* Responsive */
+  @media (max-width: 980px) {
+    html, body { overflow: auto; }
+    .app { height: auto; min-height: 100vh; }
+    .main { grid-template-columns: 1fr; }
+    .stations { max-height: 360px; }
+    .hero { grid-template-columns: 1fr; }
+    .thumb { width: 100%; max-width: 320px; height: 280px; margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-photo">
+  <!-- Watercolor Seattle skyline + pier, hand-built in SVG with soft washes and bleeds -->
+  <svg id="bgSeattle" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;">
+    <defs>
+      <!-- Watercolor edge filter — turbulence + displacement gives wet-edge bleed -->
+      <filter id="wc" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7"/>
+        <feDisplacementMap in="SourceGraphic" scale="14"/>
+      </filter>
+      <filter id="wc2" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3"/>
+        <feDisplacementMap in="SourceGraphic" scale="6"/>
+      </filter>
+      <filter id="paper" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+        <feColorMatrix values="0 0 0 0 0.96  0 0 0 0 0.94  0 0 0 0 0.88  0 0 0 0.18 0"/>
+      </filter>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f6e5d8"/>
+        <stop offset="0.4" stop-color="#e8d4c4"/>
+        <stop offset="0.75" stop-color="#c8d6dc"/>
+        <stop offset="1" stop-color="#a9bdc8"/>
+      </linearGradient>
+      <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7d99a8"/>
+        <stop offset="1" stop-color="#4d6878"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Sky wash -->
+    <rect width="1600" height="900" fill="url(#sky)"/>
+
+    <!-- Distant Mt Rainier silhouette (faded watercolor) -->
+    <g filter="url(#wc)" opacity="0.45">
+      <path d="M -50 540 L 200 480 L 380 510 L 560 440 L 700 380 L 780 320 L 840 280 L 900 270 L 960 290 L 1020 350 L 1100 420 L 1240 470 L 1400 450 L 1650 490 L 1650 560 L -50 560 Z" fill="#9aabb8"/>
+      <path d="M 780 320 L 840 280 L 900 270 L 960 290 L 1020 350 L 940 320 L 880 305 L 820 320 Z" fill="#e8eef1"/>
+    </g>
+
+    <!-- Far hills wash -->
+    <g filter="url(#wc)" opacity="0.55">
+      <path d="M -50 600 L 150 560 L 300 590 L 480 555 L 660 575 L 820 540 L 980 560 L 1180 535 L 1380 560 L 1650 545 L 1650 620 L -50 620 Z" fill="#7e95a3"/>
+    </g>
+
+    <!-- Skyline buildings (silhouette block + a few highlights) -->
+    <g filter="url(#wc2)">
+      <!-- Background building wash -->
+      <path d="M 80 620 L 80 560 L 140 560 L 140 530 L 180 530 L 180 560 L 220 560 L 220 510 L 260 510 L 260 540 L 300 540 L 300 580 L 340 580 L 340 520 L 380 520 L 380 540 L 420 540 L 420 500 L 460 500 L 460 560 L 500 560 L 500 470 L 540 470 L 540 530 L 580 530 L 580 560 L 620 560 L 620 510 L 660 510 L 660 540 L 700 540 L 700 580 L 740 580 L 740 540 L 780 540 L 780 560 L 1600 560 L 1600 620 Z" fill="#5d7280" opacity="0.7"/>
+
+      <!-- Foreground tall buildings cluster (downtown) -->
+      <rect x="840" y="380" width="42" height="180" fill="#3f5360" opacity="0.78"/>
+      <rect x="890" y="340" width="54" height="220" fill="#2f4350" opacity="0.85"/>
+      <rect x="955" y="410" width="36" height="150" fill="#46596a" opacity="0.75"/>
+      <rect x="1000" y="360" width="48" height="200" fill="#324654" opacity="0.82"/>
+      <rect x="1060" y="400" width="38" height="160" fill="#48596a" opacity="0.75"/>
+      <rect x="1110" y="330" width="46" height="230" fill="#2a3e4c" opacity="0.88"/>
+      <rect x="1170" y="390" width="40" height="170" fill="#445767" opacity="0.78"/>
+      <rect x="1220" y="420" width="34" height="140" fill="#536676" opacity="0.7"/>
+
+      <!-- Space Needle silhouette -->
+      <g fill="#3a4d5b" opacity="0.85">
+        <rect x="428" y="320" width="6" height="240"/>
+        <path d="M 410 310 L 452 310 L 446 295 L 416 295 Z"/>
+        <ellipse cx="431" cy="305" rx="30" ry="10"/>
+        <path d="M 414 300 L 448 300 L 452 285 L 410 285 Z"/>
+        <rect x="425" y="260" width="12" height="30"/>
+        <rect x="428" y="245" width="6" height="20"/>
+      </g>
+    </g>
+
+    <!-- Water (Elliott Bay) -->
+    <rect x="0" y="620" width="1600" height="280" fill="url(#water)"/>
+
+    <!-- Reflection of skyline -->
+    <g opacity="0.25" filter="url(#wc2)">
+      <rect x="840" y="620" width="42" height="60" fill="#1a2a36"/>
+      <rect x="890" y="620" width="54" height="80" fill="#1a2a36"/>
+      <rect x="955" y="620" width="36" height="50" fill="#1a2a36"/>
+      <rect x="1000" y="620" width="48" height="70" fill="#1a2a36"/>
+      <rect x="1060" y="620" width="38" height="55" fill="#1a2a36"/>
+      <rect x="1110" y="620" width="46" height="85" fill="#1a2a36"/>
+      <rect x="1170" y="620" width="40" height="60" fill="#1a2a36"/>
+      <rect x="428" y="620" width="6" height="90" fill="#1a2a36"/>
+    </g>
+
+    <!-- Water highlights -->
+    <g stroke="#cdd9df" stroke-width="1.5" stroke-linecap="round" opacity="0.5" filter="url(#wc2)">
+      <path d="M 100 700 q 30 -3 60 0 t 60 0 t 60 0" fill="none"/>
+      <path d="M 380 740 q 40 -3 80 0 t 80 0" fill="none"/>
+      <path d="M 760 770 q 40 -3 80 0 t 80 0 t 80 0" fill="none"/>
+      <path d="M 1100 720 q 40 -3 80 0 t 80 0" fill="none"/>
+      <path d="M 200 820 q 50 -3 100 0 t 100 0 t 100 0" fill="none"/>
+      <path d="M 900 850 q 50 -3 100 0 t 100 0" fill="none"/>
+    </g>
+
+    <!-- Pier 57 / Great Wheel area — left foreground -->
+    <g filter="url(#wc2)">
+      <!-- Pier deck -->
+      <rect x="60" y="640" width="360" height="24" fill="#7a5a3e" opacity="0.8"/>
+      <rect x="60" y="658" width="360" height="6" fill="#5a3f28" opacity="0.85"/>
+      <!-- Pier pylons -->
+      <g fill="#3d2c1c" opacity="0.85">
+        <rect x="80" y="664" width="6" height="110"/>
+        <rect x="130" y="664" width="6" height="120"/>
+        <rect x="180" y="664" width="6" height="125"/>
+        <rect x="230" y="664" width="6" height="130"/>
+        <rect x="280" y="664" width="6" height="125"/>
+        <rect x="330" y="664" width="6" height="118"/>
+        <rect x="380" y="664" width="6" height="110"/>
+      </g>
+      <!-- Pier shed -->
+      <rect x="100" y="600" width="160" height="42" fill="#9a6b48" opacity="0.75"/>
+      <path d="M 100 600 L 180 580 L 260 600 Z" fill="#7a4a28" opacity="0.8"/>
+      <rect x="118" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+      <rect x="138" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+      <rect x="158" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+      <rect x="178" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+      <rect x="198" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+      <rect x="218" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+      <rect x="238" y="612" width="10" height="14" fill="#3d2c1c" opacity="0.6"/>
+
+      <!-- Great Wheel -->
+      <g stroke="#2c4250" stroke-width="2.5" fill="none" opacity="0.85">
+        <circle cx="330" cy="540" r="75"/>
+        <circle cx="330" cy="540" r="6" fill="#2c4250"/>
+        <line x1="330" y1="465" x2="330" y2="615"/>
+        <line x1="255" y1="540" x2="405" y2="540"/>
+        <line x1="277" y1="487" x2="383" y2="593"/>
+        <line x1="277" y1="593" x2="383" y2="487"/>
+        <!-- support legs -->
+        <line x1="330" y1="540" x2="290" y2="640" stroke-width="3"/>
+        <line x1="330" y1="540" x2="370" y2="640" stroke-width="3"/>
+      </g>
+      <!-- gondolas -->
+      <g fill="#c44a3a" opacity="0.8">
+        <rect x="326" y="462" width="8" height="6" rx="1"/>
+        <rect x="326" y="612" width="8" height="6" rx="1"/>
+        <rect x="252" y="537" width="8" height="6" rx="1"/>
+        <rect x="402" y="537" width="8" height="6" rx="1"/>
+        <rect x="274" y="484" width="8" height="6" rx="1"/>
+        <rect x="380" y="590" width="8" height="6" rx="1"/>
+        <rect x="274" y="590" width="8" height="6" rx="1"/>
+        <rect x="380" y="484" width="8" height="6" rx="1"/>
+      </g>
+    </g>
+
+    <!-- Soft watercolor splatters / spots -->
+    <g opacity="0.18">
+      <circle cx="480" cy="180" r="60" fill="#e09980"/>
+      <circle cx="1200" cy="220" r="80" fill="#d8b48a"/>
+      <circle cx="1450" cy="480" r="50" fill="#8aa9b6"/>
+    </g>
+
+    <!-- Paper grain overlay -->
+    <rect width="1600" height="900" filter="url(#paper)" opacity="0.5"/>
+  </svg>
+  <div class="wash"></div>
+</div>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Salish Sound</h1>
+      <svg class="scribble" viewBox="0 0 140 6"><path d="M 2 3 Q 22 1 44 3 T 90 3 T 138 3" fill="none" stroke="#2c5e3f" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="sub mono">// Pacific Northwest streaming radio</div>
+    </div>
+    <div class="right">
+      <div><span class="live">●</span> live · 17 stations</div>
+      <div id="timeNow" style="margin-top:4px;">—</div>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- Left: grouped station list -->
+    <aside class="sketch stations">
+      <h2>Stations</h2>
+      <div class="count mono">[ 17 stations · grouped by genre ]</div>
+      <div class="station-scroll" id="stationList"></div>
+    </aside>
+
+    <!-- Right: hero player -->
+    <section class="sketch green hero">
+      <div class="thumb-col">
+        <div class="sketch dashed thumb" id="thumbBox">
+          <div class="thumb-empty" id="thumbEmpty">
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#1a3a5c" stroke-width="1.8">
+              <circle cx="40" cy="40" r="36"/>
+              <circle cx="40" cy="40" r="28" stroke-dasharray="2 3" opacity="0.6"/>
+              <circle cx="40" cy="40" r="18" stroke-dasharray="2 3" opacity="0.4"/>
+              <circle cx="40" cy="40" r="5" fill="#1a3a5c"/>
+            </svg>
+            <div class="thumb-label">[ thumbnail · pulled from stream ]</div>
+          </div>
+        </div>
+        <div class="status" id="status">○ idle — pick a station</div>
+      </div>
+
+      <div class="meta-col">
+        <div class="now-label mono">NOW PLAYING</div>
+        <div class="station-name" id="stationName">Choose a station →</div>
+        <div class="station-meta mono" id="stationMeta"></div>
+
+        <div class="track" id="trackBlock" style="display:none;">
+          <div class="lbl mono">track</div>
+          <div class="song" id="trackSong"></div>
+          <div class="artist" id="trackArtist"></div>
+        </div>
+
+        <div class="controls">
+          <div class="transport">
+            <button class="btn-circ" id="prevBtn" title="Previous">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1 v12 M11 1 L4 7 L11 13 Z" stroke="currentColor"/></svg>
+            </button>
+            <button class="btn-circ lg play" id="playBtn" title="Play / Pause">
+              <svg id="playIcon" width="22" height="22" viewBox="0 0 22 22" fill="currentColor"><path d="M4 2 L20 11 L4 20 Z"/></svg>
+            </button>
+            <button class="btn-circ" id="nextBtn" title="Next">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M11 1 v12 M3 1 L10 7 L3 13 Z" stroke="currentColor"/></svg>
+            </button>
+            <button class="fav-big" id="favBtn">★ favorite</button>
+          </div>
+
+          <div class="row">
+            <span class="lbl mono">VOL</span>
+            <input type="range" id="volSlider" min="0" max="1" step="0.01" value="0.7" />
+            <span class="vol-num mono" id="volNum">70</span>
+          </div>
+
+          <div class="row">
+            <span class="lbl mono">SLEEP</span>
+            <div class="sleep-btns">
+              <button class="sleep-btn active" data-min="0">off</button>
+              <button class="sleep-btn" data-min="15">15m</button>
+              <button class="sleep-btn" data-min="30">30m</button>
+              <button class="sleep-btn" data-min="60">60m</button>
+            </div>
+            <span class="sleep-rem mono" id="sleepRem"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div>// background: Seattle skyline + pier · watercolor</div>
+    <div>Pacific blue · alder green · cedar</div>
+  </footer>
+</div>
+
+<script>
+  // ── Stations ───────────────────────────────────────────────────────────
+  const STATIONS = [
+    { id: 'knkx',    name: 'KNKX',             freq: '88.5 FM',      genre: 'Jazz',       tag: 'Public radio · Tacoma', stream: 'https://knkx-live-a.edge.audiocdn.com/6284_128k', thumb: 'https://cdn-profiles.tunein.com/s44526/images/logog.png' },
+    { id: 'jazz24',  name: 'Jazz24',           freq: 'Online',       genre: 'Jazz',       tag: '24/7 jazz',             stream: 'https://knkx-live-a.edge.audiocdn.com/6285_128k', thumb: 'https://radiostationusa.fm/assets/image/radio/180/jazz24.jpg' },
+    { id: 'king',    name: 'KING FM',          freq: '98.1 FM',      genre: 'Classical',  tag: 'Symphonic',             stream: 'http://classicalking.streamguys1.com/king-fm-mp3', thumb: 'https://classicalking.org/_next/static/media/classical-king.82d89474.png' },
+    { id: 'kingCal', name: 'KING FM-Calm',     freq: '98.1 FM/HD2',  genre: 'Classical',  tag: 'Symphonic',             stream: 'https://classicalking.streamguys1.com/evergreen-aac-128k', thumb: 'https://classicalking.org/_next/static/media/classical-calm.af812429.png' },
+    { id: 'kingChr', name: 'KING FM-Christmas',freq: '98.1 FM/HD3',  genre: 'Classical',  tag: 'Symphonic',             stream: 'https://classicalking.streamguys1.com/christmas-aac-128k', thumb: 'https://classicalking.org/_next/static/media/christmas.981905d0.png' },
+    { id: 'classic', name: 'UK Classic FM', freq: 'Online',   genre: 'Classical',  tag: 'London',                stream: 'http://ice-the.musicradio.com/ClassicFMMP3', thumb: 'https://www.globalplayer.com/assets/track-placeholders/classicfm.jpg' },
+    { id: 'movin',   name: 'MOViN 92.5',    freq: '92.5 FM',  genre: 'Pop',        tag: 'Top 40',                stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/KQMVFMAAC_SC', thumb: 'https://live.movin925.com/wp-content/uploads/2024/01/moving-streaming-Station.jpg' },
+    { id: 'warm',    name: 'Warm 106.9',    freq: '106.9 FM', genre: 'Pop',        tag: 'Top 40',                stream: 'https://16603.live.streamtheworld.com/KRWMFMAAC.aac', thumb: 'https://radiostationusa.fm/assets/image/radio/180/warm.png' },
+    { id: 'kbks',    name: 'STAR 101.5',    freq: '101.5 FM', genre: 'Pop',        tag: 'Adult contemporary',    stream: 'https://29312.live.streamtheworld.com/KPLZFM.mp3', thumb: 'https://dehayf5mhw1h7.cloudfront.net/wp-content/uploads/sites/2128/2020/10/12213651/logo-sea-real-glow.webp' },
+    { id: 'hot',     name: 'Hot 103.7',     freq: '103.7 FM', genre: 'Hip-hop',    tag: 'Urban',                 stream: 'https://live.amperwave.net/manifest/audacy-khtpfmaac-hlsc', thumb: 'https://radioimg.audacy.com/aud-opsconsole-media-images-prod-prod/logos/KHTPFM.jpg' },
+    { id: 'kplu',    name: 'C89.5',         freq: '89.5 FM',  genre: 'Dance',      tag: 'Student-run EDM',       stream: 'https://www.c895.org/live.m3u', thumb: 'https://www.c895.org/sites/default/files/C895-logo-social.png' },
+    { id: 'kexp',    name: 'KEXP',          freq: '90.3 FM',  genre: 'Indie',      tag: 'DJ-curated',            stream: 'https://kexp.streamguys1.com/kexp160.aac', thumb: 'https://www.kexp.org/sites/default/files/images/KEXP_Logo_512x512_BLACK.png' },
+    { id: 'kzok',    name: 'KZOK',          freq: '102.5 FM', genre: 'Rock',       tag: 'Classic rock',          stream: '', thumb: '' },
+    { id: 'kuow',    name: 'KUOW',          freq: '94.9 FM',  genre: 'News',       tag: 'NPR member',            stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/KUOWFM_HIGH_MP3.mp3', thumb: 'https://kuow.org/sites/default/files/logo.png' },
+    { id: 'kbcs',      name: 'KBCS',        freq: '91.3 FM',  genre: 'Folk',    tag: 'Community · World', stream: 'http://stream.pacificaservice.org:8000/kbcs',  thumb: 'https://www.kbcs.fm/images/kbcs_logo.png' },
+    { id: 'connectfm', name: 'CONNECT FM', freq: '91.5 FM',  genre: 'Punjabi', tag: 'Surrey · Canada',   stream: 'https://n18.rcs.revma.com/dm32hsut068uv',       thumb: 'https://connectfm.ca/Connect_Media_Network.webp' },
+    { id: 'redfm',     name: 'RED FM',     freq: '89.1 FM',  genre: 'Punjabi', tag: 'Surrey · Canada',   stream: 'https://ice24.securenetsystems.net/CKYE',        thumb: 'https://redfm.ca/images/redfm_logo_van_155.webp' },
+  ];
+
+  const NOW = {
+    knkx:    { song: ' ', artist: ' ' },
+    king:    { song: ' ', artist: ' ' },
+    kingCal: { song: ' ', artist: ' ' },
+    kingChr: { song: ' ', artist: ' ' },
+    jazz24:  { song: ' ', artist: ' ' },
+    movin:   { song: ' ', artist: ' ' },
+    warm:    { song: ' ', artist: ' ' },
+    hot:     { song: ' ', artist: ' ' },
+    classic: { song: ' ', artist: ' ' },
+    kexp:    { song: ' ',               artist: ' ' },
+    kuow:    { song: ' ',               artist: ' ' },
+    kbcs:    { song: ' ',               artist: ' ' },
+    kplu:    { song: ' ',               artist: ' ' },
+    kzok:    { song: ' ',               artist: ' ' },
+    kbks:      { song: ' ', artist: ' ' },
+    connectfm: { song: ' ', artist: ' ' },
+    redfm:     { song: ' ', artist: ' ' },
+  };
+
+  // ── State ──────────────────────────────────────────────────────────────
+  const audio = new Audio();
+  audio.preload = 'none';
+  audio.crossOrigin = 'anonymous';
+
+  let state = {
+    currentId: localStorage.getItem('ss.current') || null,
+    playing: false,
+    buffering: false,
+    favorites: JSON.parse(localStorage.getItem('ss.favs') || '[]'),
+    volume: parseFloat(localStorage.getItem('ss.vol')) || 0.7,
+    sleepMin: 0,
+    sleepRemaining: 0,
+    sleepTimer: null,
+  };
+  audio.volume = state.volume;
+
+  audio.addEventListener('playing', () => { state.playing = true; state.buffering = false; render(); });
+  audio.addEventListener('pause',   () => { state.playing = false; render(); });
+  audio.addEventListener('waiting', () => { state.buffering = true; render(); });
+  audio.addEventListener('canplay', () => { state.buffering = false; render(); });
+  audio.addEventListener('error',   () => { state.buffering = false; state.playing = false; render(); });
+
+  function play(id) {
+    const s = STATIONS.find(x => x.id === id); if (!s) return;
+    state.currentId = id;
+    localStorage.setItem('ss.current', id);
+    if (s.stream) {
+      state.buffering = true; render();
+      audio.src = s.stream;
+      audio.play().catch(() => { state.buffering = false; state.playing = false; render(); });
+    } else {
+      // wireframe demo: simulate playback for stations without live stream URLs
+      audio.pause(); audio.removeAttribute('src');
+      state.buffering = true; render();
+      setTimeout(() => { state.buffering = false; state.playing = true; render(); }, 600);
+    }
+  }
+  function pause() { audio.pause(); state.playing = false; render(); }
+  function toggle(id) {
+    if (id && id !== state.currentId) return play(id);
+    if (state.playing) pause(); else if (state.currentId) play(state.currentId);
+  }
+  function step(dir) {
+    const i = STATIONS.findIndex(s => s.id === state.currentId);
+    const ni = (i + dir + STATIONS.length) % STATIONS.length;
+    play(STATIONS[ni].id);
+  }
+  function toggleFav(id) {
+    state.favorites = state.favorites.includes(id)
+      ? state.favorites.filter(x => x !== id)
+      : [...state.favorites, id];
+    localStorage.setItem('ss.favs', JSON.stringify(state.favorites));
+    render();
+  }
+  function setVol(v) {
+    state.volume = v; audio.volume = v;
+    localStorage.setItem('ss.vol', String(v));
+    document.getElementById('volNum').textContent = Math.round(v * 100);
+  }
+  function setSleep(min) {
+    state.sleepMin = min;
+    if (state.sleepTimer) { clearInterval(state.sleepTimer); state.sleepTimer = null; }
+    if (!min) { state.sleepRemaining = 0; render(); return; }
+    state.sleepRemaining = min * 60;
+    state.sleepTimer = setInterval(() => {
+      state.sleepRemaining--;
+      if (state.sleepRemaining <= 0) {
+        clearInterval(state.sleepTimer);
+        state.sleepTimer = null;
+        state.sleepMin = 0;
+        pause();
+      }
+      render();
+    }, 1000);
+    render();
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────
+  function render() {
+    // Station list — grouped
+    const list = document.getElementById('stationList');
+    const groups = {};
+    for (const s of STATIONS) (groups[s.genre] = groups[s.genre] || []).push(s);
+    list.innerHTML = '';
+    for (const [g, arr] of Object.entries(groups)) {
+      const gd = document.createElement('div'); gd.className = 'group';
+      gd.innerHTML = `<div class="group-hd"><span>${g}</span><span class="line"></span><span class="n">${arr.length}</span></div>`;
+      for (const s of arr) {
+        const active = state.currentId === s.id;
+        const fav = state.favorites.includes(s.id);
+        const row = document.createElement('div');
+        row.className = 'station' + (active ? ' active' : '');
+        row.innerHTML = `
+          <div class="grow">
+            <div class="name">${s.name}</div>
+            <div class="meta mono">${s.freq} · ${s.tag}</div>
+          </div>
+          ${active && state.playing ? '<div class="eq"><i></i><i></i><i></i></div>' : ''}
+          <button class="fav ${fav ? 'on' : ''}" data-fav="${s.id}" title="Favorite">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="${fav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2 L14.5 8.5 L21.5 9 L16 13.5 L18 21 L12 17 L6 21 L8 13.5 L2.5 9 L9.5 8.5 Z"/></svg>
+          </button>`;
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('[data-fav]')) return;
+          toggle(s.id);
+        });
+        gd.appendChild(row);
+      }
+      list.appendChild(gd);
+    }
+    list.querySelectorAll('[data-fav]').forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleFav(b.dataset.fav); });
+
+    // Hero
+    const cur = STATIONS.find(s => s.id === state.currentId);
+    const np = cur ? NOW[cur.id] : null;
+
+    // Thumbnail
+    const thumbBox = document.getElementById('thumbBox');
+    const thumbEmpty = document.getElementById('thumbEmpty');
+    if (cur && cur.thumb) {
+      thumbEmpty.style.display = 'none';
+      let thumbArt = thumbBox.querySelector('.thumb-art');
+      if (!thumbArt) {
+        thumbArt = document.createElement('div');
+        thumbArt.className = 'thumb-art';
+        thumbBox.appendChild(thumbArt);
+      }
+      thumbArt.style.backgroundImage = `url('${cur.thumb}')`;
+    } else {
+      thumbEmpty.style.display = '';
+      const thumbArt = thumbBox.querySelector('.thumb-art');
+      if (thumbArt) thumbArt.remove();
+    }
+
+    document.getElementById('stationName').textContent = cur ? cur.name : 'Choose a station →';
+    document.getElementById('stationMeta').textContent = cur ? `${cur.freq} · ${cur.genre} · ${cur.tag}` : '';
+
+    const tb = document.getElementById('trackBlock');
+    if (np) {
+      tb.style.display = '';
+      document.getElementById('trackSong').textContent = '♪ ' + np.song;
+      document.getElementById('trackArtist').textContent = np.artist;
+    } else {
+      tb.style.display = 'none';
+    }
+
+    const status = document.getElementById('status');
+    if (state.buffering) { status.textContent = '◌ buffering…'; status.className = 'status buffering'; }
+    else if (state.playing) { status.textContent = '● ON AIR'; status.className = 'status live'; }
+    else { status.textContent = cur ? '○ paused' : '○ idle — pick a station'; status.className = 'status'; }
+
+    document.getElementById('playIcon').innerHTML = state.playing
+      ? '<rect x="4" y="2" width="5" height="18"/><rect x="13" y="2" width="5" height="18"/>'
+      : '<path d="M4 2 L20 11 L4 20 Z"/>';
+
+    const favBtn = document.getElementById('favBtn');
+    const isFav = cur && state.favorites.includes(cur.id);
+    favBtn.classList.toggle('on', !!isFav);
+    favBtn.textContent = isFav ? '★ favorited' : '★ favorite';
+    favBtn.disabled = !cur;
+
+    // Sleep
+    document.querySelectorAll('.sleep-btn').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.min) === state.sleepMin);
+    });
+    const sr = document.getElementById('sleepRem');
+    if (state.sleepRemaining > 0) {
+      const m = Math.floor(state.sleepRemaining / 60);
+      const s = state.sleepRemaining % 60;
+      sr.textContent = `-${m}:${String(s).padStart(2,'0')}`;
+    } else {
+      sr.textContent = '';
+    }
+  }
+
+  // Controls
+  document.getElementById('playBtn').onclick = () => toggle();
+  document.getElementById('prevBtn').onclick = () => step(-1);
+  document.getElementById('nextBtn').onclick = () => step(1);
+  document.getElementById('favBtn').onclick = () => state.currentId && toggleFav(state.currentId);
+  document.getElementById('volSlider').addEventListener('input', (e) => setVol(parseFloat(e.target.value)));
+  document.getElementById('volSlider').value = state.volume;
+  document.getElementById('volNum').textContent = Math.round(state.volume * 100);
+  document.querySelectorAll('.sleep-btn').forEach(b => b.onclick = () => setSleep(Number(b.dataset.min)));
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    if (e.code === 'ArrowLeft') step(-1);
+    if (e.code === 'ArrowRight') step(1);
+  });
+
+  // Clock
+  function clock() {
+    const d = new Date();
+    const opts = { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' };
+    document.getElementById('timeNow').textContent = 'PT · ' + d.toLocaleTimeString('en-US', opts);
+  }
+  clock(); setInterval(clock, 30000);
+
+  render();
+</script>
+</body>
+</html>
