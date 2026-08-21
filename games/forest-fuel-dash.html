@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forest Fuel Dash</title>
+<style>
+  :root {
+    --sky: #d6f5c8;      /* light green forest background */
+    --ground: #ff8fc7;   /* pink road strip */
+    --text: #1b5e20;     /* dark green words */
+    --accent: #e91e8c;   /* pink score / buttons */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Comic Sans MS", "Trebuchet MS", sans-serif;
+    background: var(--sky); color: var(--text); text-align: center;
+    user-select: none; overflow: hidden;
+  }
+  h1 { margin: 8px; font-size: 8vw; text-shadow: 2px 2px 0 #fff; }
+  #hud { font-size: 5.5vw; font-weight: bold; color: var(--accent); }
+  #hud .fuel { color: var(--text); }
+  #stage {
+    position: relative; width: 100vw; height: 66vh;
+    overflow: hidden; touch-action: none;
+    border-bottom: 8vh solid var(--ground);
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 8vh, rgba(255,255,255,.15) 8vh 9vh),
+      var(--sky);
+  }
+  .item { position: absolute; font-size: 8vw; will-change: top; }
+  #player { position: absolute; bottom: 0.5vh; font-size: 12vw; transform: translateX(-50%); }
+  #msg {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    flex-direction: column; background: rgba(255,255,255,0.92);
+    padding: 4vw;
+  }
+  #msg.show { display: flex; }
+  button {
+    font: inherit; font-size: 6vw; padding: 2vh 8vw; margin-top: 2vh;
+    border: none; border-radius: 999px; background: var(--accent);
+    color: white; cursor: pointer; box-shadow: 0 4px 0 #ad1457;
+  }
+  button:active { transform: translateY(3px); box-shadow: 0 1px 0 #ad1457; }
+</style>
+</head>
+<body>
+  <h1>🏎️ Forest Fuel Dash 🌲</h1>
+  <div id="hud">⛽ Fuel: <span class="fuel" id="score">0</span> / 10 &nbsp; 💥 Crashes: <span id="misses">0</span> / 3</div>
+  <div id="stage">
+    <div id="player">🏎️</div>
+    <div id="msg">
+      <div id="msgText" style="font-size:6.5vw;"></div>
+      <button id="playBtn">Start!</button>
+    </div>
+  </div>
+
+<script>
+  // ---- The game's rules ----
+  const GOOD = "⛽";                 // fuel to collect
+  const BADS = ["🚧", "🪨", "🛢️"];   // things to dodge: cones, rocks, oil spills
+  const WIN_SCORE = 10;              // collect this many fuel to win
+  const MAX_MISSES = 3;              // crash this many times and the round ends
+  const WIN_MSG  = "YOU WIN! Fuel champion! 🏆";
+  const LOSE_MSG = "Oops! Try again, you've got this! 💪";
+  // --------------------------
+
+  const stage = document.getElementById("stage");
+  const player = document.getElementById("player");
+  const scoreEl = document.getElementById("score");
+  const missesEl = document.getElementById("misses");
+  const msg = document.getElementById("msg");
+  const msgText = document.getElementById("msgText");
+  const playBtn = document.getElementById("playBtn");
+
+  let score, misses, playerX, items, running, keys, lastSpawn;
+
+  function reset() {
+    score = 0; misses = 0; playerX = 50; items = []; running = false;
+    keys = {}; lastSpawn = 0;
+    stage.querySelectorAll(".item").forEach(n => n.remove());
+    updateHud();
+    player.style.left = playerX + "%";
+  }
+
+  function updateHud() {
+    scoreEl.textContent = score;
+    missesEl.textContent = misses;
+  }
+
+  function start() {
+    reset();
+    running = true;
+    msg.classList.remove("show");
+    requestAnimationFrame(loop);
+  }
+
+  function endGame(won) {
+    running = false;
+    msgText.textContent = won ? WIN_MSG : LOSE_MSG;
+    playBtn.textContent = "Play Again";
+    msg.classList.add("show");
+  }
+
+  function spawnItem() {
+    const isBad = Math.random() < 0.35;
+    const el = document.createElement("div");
+    el.className = "item";
+    el.textContent = isBad ? BADS[Math.floor(Math.random() * BADS.length)] : GOOD;
+    el.dataset.bad = isBad ? "1" : "0";
+    el.style.left = Math.random() * 88 + "%";
+    el.style.top = "-10%";
+    el.speed = 0.5 + Math.random() * 0.4 + score * 0.04; // gets a little faster
+    stage.appendChild(el);
+    items.push(el);
+  }
+
+  function loop(t) {
+    if (!running) return;
+    // move the race car with the arrow keys
+    if (keys.ArrowLeft) playerX = Math.max(4, playerX - 1.6);
+    if (keys.ArrowRight) playerX = Math.min(96, playerX + 1.6);
+    player.style.left = playerX + "%";
+
+    if (t - lastSpawn > 850) { spawnItem(); lastSpawn = t; }
+
+    for (const el of [...items]) {
+      let top = parseFloat(el.style.top);
+      top += el.speed;
+      el.style.top = top + "%";
+      const elX = parseFloat(el.style.left);
+      // near the car at the bottom?
+      if (top > 78 && top < 96 && Math.abs(elX - playerX) < 12) {
+        if (el.dataset.bad === "1") misses++;
+        else score++;
+        removeItem(el); updateHud();
+      } else if (top > 105) {
+        removeItem(el);
+      }
+    }
+
+    if (score >= WIN_SCORE) return endGame(true);
+    if (misses >= MAX_MISSES) return endGame(false);
+    requestAnimationFrame(loop);
+  }
+
+  function removeItem(el) {
+    el.remove();
+    items = items.filter(i => i !== el);
+  }
+
+  // arrow-key controls
+  addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") e.preventDefault();
+    keys[e.key] = true;
+  });
+  addEventListener("keyup", e => { keys[e.key] = false; });
+
+  playBtn.addEventListener("click", start);
+  reset();
+  msgText.textContent = "Use ⬅️ ➡️ to grab ⛽ and dodge 🚧 🪨 🛢️!";
+  msg.classList.add("show");
+</script>
+</body>
+</html>
